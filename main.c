@@ -48,10 +48,10 @@
 
 #include "ws2811.h"
 
-#define TARGET_FREQ
 #define GPIO_PIN 18
 #define DMA 10
-#define LED_COUNT 12
+#define MAX_LEDS 255
+#define STRIP_TYPE WS2811_STRIP_GBR
 
 ws2811_t ledstring =
 	{
@@ -62,10 +62,10 @@ ws2811_t ledstring =
 				[0] =
 					{
 						.gpionum = GPIO_PIN,
-						.count = LED_COUNT,
+						.count = 0,
 						.invert = 0,
 						.brightness = 255,
-						.strip_type = WS2811_STRIP_GBR,
+						.strip_type = STRIP_TYPE,
 					},
 				[1] =
 					{
@@ -77,48 +77,57 @@ ws2811_t ledstring =
 			},
 };
 
-void set_color(ws2811_t *leds, uint32_t color)
+void set_color(const char *leds, size_t leds_count, uint32_t color)
 {
-	for (int i = 0; i < leds->channel[0].count; i++)
+	printf("setting color %X to leds ",color);
+	for (size_t i = 0; i < leds_count; i++)
 	{
-		leds->channel[0].leds[i] = color;
+		if (leds[i]!='0'){
+			printf("1");
+			ledstring.channel[0].leds[i] = color;
+		} else {
+			printf("0");
+		}
 	}
+	printf("\n");
 }
 
 int main(int argc, char *argv[])
 {
-	ws2811_return_t ret;
-
 	if (argc < 3)
 	{
 		printf("ledstrip %d.%d.%d\n", VERSION_MAJOR, VERSION_MINOR, VERSION_MICRO);
+		printf("led strip should be connected to GPIO PIN %d. DMA: 0x%X. strip type: 0x%X \n", GPIO_PIN, STRIP_TYPE);
 		printf("Usage: [color] [leds]\n");
 		printf("Where:\n");
 		printf("\tcolor is (0xWWRRGGBB), but in decimal form\n");
-		printf("\tleds is the number of leds to lit\n");
+		printf("\tleds is a string representing the leds to lit: try: 010101\n");
 		return EXIT_SUCCESS;
 	}
 
 	uint32_t color = atoi(argv[1]);
-	uint32_t leds = atoi(argv[2]);
+	const char *leds = argv[2];
 
-	if (leds == 0)
+	int leds_count = strnlen(leds, MAX_LEDS);
+
+	printf("color %d, leds: %s\n", color, leds);
+	if (leds_count < 1)
 	{
-		leds = LED_COUNT;
+		return EXIT_SUCCESS;
 	}
 
-	printf("color %d, leds: %d\n", color, leds);
-	ledstring.channel[0].count = leds;
+	ledstring.channel[0].count = leds_count;
 
-	if ((ret = ws2811_init(&ledstring)) != WS2811_SUCCESS)
+	ws2811_return_t ret = ws2811_init(&ledstring);
+	if (ret != WS2811_SUCCESS)
 	{
 		fprintf(stderr, "ws2811_init failed: %s\n", ws2811_get_return_t_str(ret));
 		return ret;
 	}
 
-	set_color(&ledstring, color);
-
-	if ((ret = ws2811_render(&ledstring)) != WS2811_SUCCESS)
+	set_color(leds, leds_count, color);
+	ret = ws2811_render(&ledstring);
+	if (ret != WS2811_SUCCESS)
 	{
 		fprintf(stderr, "ws2811_render failed: %s\n", ws2811_get_return_t_str(ret));
 	}
