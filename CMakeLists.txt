@@ -17,7 +17,7 @@ option(BUILD_TEST "Build test application" ON)
 set(CMAKE_C_STANDARD 11)
 
 set(LIB_TARGET ws2811)
-set(TEST_TARGET test)
+set(APP_TARGET ledstrip)
 
 set(LIB_PUBLIC_HEADERS
     ws2811.h
@@ -39,7 +39,7 @@ set(LIB_SOURCES
     rpihw.c
 )
 
-set(TEST_SOURCES
+set(APP_SOURCES
     main.c
 )
 
@@ -69,6 +69,6 @@ endif()
 if(BUILD_TEST)
     include_directories(${CMAKE_CURRENT_BINARY_DIR})
 
-    add_executable(${TEST_TARGET} ${TEST_SOURCES})
-    target_link_libraries(${TEST_TARGET} ${LIB_TARGET})
+    add_executable(${APP_TARGET} ${APP_SOURCES})
+    target_link_libraries(${APP_TARGET} ${LIB_TARGET})
 endif()
