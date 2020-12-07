@@ -34,6 +34,7 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/file.h>
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <signal.h>
@@ -52,6 +53,7 @@
 #define DMA 10
 #define MAX_LEDS 255
 #define STRIP_TYPE WS2811_STRIP_GBR
+#define LOCK_FILE "/var/lock/ledstrip"
 
 ws2811_t ledstring =
 	{
@@ -79,43 +81,34 @@ ws2811_t ledstring =
 
 void set_color(const char *leds, size_t leds_count, uint32_t color)
 {
-	printf("setting color %X to leds ",color);
+	printf("setting color %X to leds ", color);
 	for (size_t i = 0; i < leds_count; i++)
 	{
-		if (leds[i]!='0'){
+		if (leds[i] != '0')
+		{
 			printf("1");
 			ledstring.channel[0].leds[i] = color;
-		} else {
+		}
+		else
+		{
 			printf("0");
 		}
 	}
 	printf("\n");
 }
 
-int main(int argc, char *argv[])
+void show_help()
 {
-	if (argc < 3)
-	{
-		printf("ledstrip %d.%d.%d\n", VERSION_MAJOR, VERSION_MINOR, VERSION_MICRO);
-		printf("led strip should be connected to GPIO PIN %d. DMA: 0x%X. strip type: 0x%X \n", GPIO_PIN, STRIP_TYPE);
-		printf("Usage: [color] [leds]\n");
-		printf("Where:\n");
-		printf("\tcolor is (0xWWRRGGBB), but in decimal form\n");
-		printf("\tleds is a string representing the leds to lit: try: 010101\n");
-		return EXIT_SUCCESS;
-	}
+	printf("ledstrip %d.%d.%d\n", VERSION_MAJOR, VERSION_MINOR, VERSION_MICRO);
+	printf("led strip should be connected to GPIO PIN %d. DMA: 0x%X. strip type: 0x%X \n", GPIO_PIN, STRIP_TYPE);
+	printf("Usage: [color] [leds]\n");
+	printf("Where:\n");
+	printf("\tcolor is (0xWWRRGGBB), but in decimal form\n");
+	printf("\tleds is a string representing the leds to lit: try: 010101\n");
+}
 
-	uint32_t color = atoi(argv[1]);
-	const char *leds = argv[2];
-
-	int leds_count = strnlen(leds, MAX_LEDS);
-
-	printf("color %d, leds: %s\n", color, leds);
-	if (leds_count < 1)
-	{
-		return EXIT_SUCCESS;
-	}
-
+ws2811_return_t run(uint32_t color, const char *leds, int leds_count)
+{
 	ledstring.channel[0].count = leds_count;
 
 	ws2811_return_t ret = ws2811_init(&ledstring);
@@ -133,4 +126,48 @@ int main(int argc, char *argv[])
 	}
 	ws2811_fini(&ledstring);
 	return ret;
+}
+
+int main(int argc, char *argv[])
+{
+	if (argc < 3)
+	{
+		show_help();
+		return EXIT_SUCCESS;
+	}
+
+	uint32_t color = atoi(argv[1]);
+	const char *leds = argv[2];
+
+	int leds_count = strnlen(leds, MAX_LEDS);
+
+	printf("color %d, leds: %s\n", color, leds);
+	if (leds_count < 1)
+	{
+		return EXIT_SUCCESS;
+	}
+
+	int fd_lock = open(LOCK_FILE, O_CREAT);
+	if (fd_lock < 0)
+	{
+		perror("failed to open lock file");
+		return EXIT_FAILURE;
+	}
+	int retval = flock(fd_lock, LOCK_EX);
+	if (retval != 0)
+	{
+		perror("flock failed");
+		return EXIT_FAILURE;
+	}
+
+	ws2811_return_t err = run(color,leds,leds_count);
+
+	retval = flock(fd_lock, LOCK_UN);
+	if (retval != 0)
+	{
+		perror("flock failed");
+		return EXIT_FAILURE;
+	}
+
+	return err;
 }
